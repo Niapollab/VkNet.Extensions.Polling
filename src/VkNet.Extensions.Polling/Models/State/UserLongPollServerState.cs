@@ -9,6 +9,7 @@
         }
 
         public ulong Ts { get; }
+
         public ulong Pts { get; private set; }
 
         public void Update(ulong pts)

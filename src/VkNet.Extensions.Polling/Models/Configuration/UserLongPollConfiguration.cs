@@ -11,10 +11,11 @@ namespace VkNet.Extensions.Polling.Models.Configuration
             RequestDelay = TimeSpan.FromMilliseconds(333),
             IgnorePreviousUpdates = true
         };
-        
+
         public TimeSpan RequestDelay { get; set; }
+
         public bool IgnorePreviousUpdates { get; set; }
-        public UsersFields Fields { get; set; } 
-        
+
+        public UsersFields Fields { get; set; }
     }
 }

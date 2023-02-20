@@ -27,11 +27,11 @@ namespace VkNet.Extensions.Polling
             var groups = vkApi.Groups.GetById(null, null, null);
 
             var groupOwner = groups.FirstOrDefault();
-            
+
             if (groupOwner != null)
             {
                 _groupId = groupOwner.Id;
-                
+
                 return true;
             }
 

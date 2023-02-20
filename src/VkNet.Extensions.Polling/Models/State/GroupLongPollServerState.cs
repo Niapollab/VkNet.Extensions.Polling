@@ -10,7 +10,9 @@
         }
 
         public ulong Ts { get; private set; }
+
         public string Key { get; }
+
         public string Server { get; }
 
         public void Update(ulong ts)

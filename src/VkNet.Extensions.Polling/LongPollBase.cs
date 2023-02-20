@@ -15,9 +15,11 @@ namespace VkNet.Extensions.Polling
         where TLongPollConfiguration : ILongPollConfiguration
     {
         private readonly CancellationTokenSource _longPollStopTokenSource;
+
         private readonly IVkApi _vkApi;
 
         private readonly ChannelWriter<TLongPollUpdate> _updateChannelWriter;
+
         private readonly ChannelReader<TLongPollUpdate> _updateChannelReader;
 
         protected LongPollBase(IVkApi vkApi)
