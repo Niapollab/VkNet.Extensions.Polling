@@ -99,55 +99,46 @@ namespace VkNet.Extensions.Polling
 
         private async ValueTask ReceiveUpdatesAsync(CancellationToken cancellationToken = default)
         {
-            var longPollServerInformation = await GetServerInformationAsync(_vkApi, Configuration, cancellationToken)
-                .ConfigureAwait(false);
-
-            while (!cancellationToken.IsCancellationRequested)
+            try
             {
-                bool needRepeat;
+                var longPollServerInformation = await GetServerInformationAsync(_vkApi, Configuration, cancellationToken)
+                    .IgnoreExceptions(ignoreOperationCanceledException: false)
+                    .ConfigureAwait(false);
 
-                TLongPollResponse longPollResponse = default;
-
-                do
+                while (true)
                 {
-                    try
+                    var longPollResponse = await GetUpdatesAsync(_vkApi, Configuration, longPollServerInformation, cancellationToken)
+                        .IgnoreExceptions(ignoreOperationCanceledException: false)
+                        .ConfigureAwait(false);
+
+                    if (longPollResponse != null)
                     {
-                        longPollResponse = await GetUpdatesAsync(_vkApi, Configuration,
-                            longPollServerInformation,
-                            cancellationToken)
+                        foreach (var update in ConvertLongPollResponse(longPollResponse))
+                        {
+                            await _updateChannelWriter
+                                .WriteAsync(update, cancellationToken: cancellationToken)
+                                .ConfigureAwait(false);
+                        }
+
+                        await Task
+                            .Delay(Configuration.RequestDelay)
+                            .ConfigureAwait(false);
+                    }
+                    else
+                    {
+                        var newLongPollServerInformation = await GetServerInformationAsync(_vkApi, Configuration, cancellationToken)
+                            .IgnoreExceptions(ignoreOperationCanceledException: false)
                             .ConfigureAwait(false);
 
-                        needRepeat = false;
+                        if (newLongPollServerInformation != null)
+                            longPollServerInformation = newLongPollServerInformation;
                     }
-                    catch
-                    {
-                        try
-                        {
-                            longPollServerInformation =
-                                await GetServerInformationAsync(_vkApi, Configuration,
-                                    cancellationToken)
-                                    .ConfigureAwait(false);
-                        }
-                        catch
-                        {
-                        }
-
-                        needRepeat = true;
-                    }
-                } while (needRepeat);
-
-                var updates = ConvertLongPollResponse(longPollResponse);
-
-                foreach (var update in updates)
-                {
-                    await _updateChannelWriter
-                        .WriteAsync(update, cancellationToken: cancellationToken)
-                        .ConfigureAwait(false);
                 }
-
-                await Task
-                    .Delay(Configuration.RequestDelay)
-                    .ConfigureAwait(false);
+            }
+            catch (System.Exception ex)
+            {
+                _updateChannelWriter.Complete(ex);
+                throw;
             }
         }
     }
