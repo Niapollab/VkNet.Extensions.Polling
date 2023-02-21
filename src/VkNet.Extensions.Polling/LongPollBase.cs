@@ -4,13 +4,12 @@ using System.Threading;
 using System.Threading.Channels;
 using System.Threading.Tasks;
 using VkNet.Abstractions;
-using VkNet.Exception;
 using VkNet.Extensions.Polling.Models.Configuration;
 using VkNet.Extensions.Polling.Models.State;
 
 namespace VkNet.Extensions.Polling
 {
-    public abstract class LongPollBase<TLongPollResponse, TLongPollUpdate, TLongPollServerState, TLongPollConfiguration>
+    public abstract class LongPollBase<TLongPollResponse, TLongPollUpdate, TLongPollServerState, TLongPollConfiguration> : IDisposable
         where TLongPollServerState : ILongPollServerState
         where TLongPollConfiguration : ILongPollConfiguration
     {
@@ -21,6 +20,8 @@ namespace VkNet.Extensions.Polling
         private readonly ChannelWriter<TLongPollUpdate> _updateChannelWriter;
 
         private readonly ChannelReader<TLongPollUpdate> _updateChannelReader;
+
+        private bool _disposedValue;
 
         protected LongPollBase(IVkApi vkApi)
         {
@@ -114,12 +115,33 @@ namespace VkNet.Extensions.Polling
 
         public Task Stop()
         {
-            return Task.Factory.StartNew(_longPollStopTokenSource.Cancel);
+            _longPollStopTokenSource.Cancel();
+            return Task.CompletedTask;
         }
 
         public ChannelReader<TLongPollUpdate> AsChannelReader()
         {
             return _updateChannelReader;
+        }
+
+        protected virtual void Dispose(bool disposing)
+        {
+            if (!_disposedValue)
+            {
+                if (disposing)
+                {
+                    _vkApi.Dispose();
+                    _longPollStopTokenSource.Dispose();
+                }
+
+                _disposedValue = true;
+            }
+        }
+
+        void IDisposable.Dispose()
+        {
+            Dispose(disposing: true);
+            GC.SuppressFinalize(this);
         }
     }
 }
