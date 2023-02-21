@@ -85,9 +85,13 @@ namespace VkNet.Extensions.Polling
         {
             foreach (GroupUpdate groupUpdate in longPollResponse.Updates)
             {
-                if (Configuration.AllowedUpdateTypes != null &&
-                    Array.IndexOf(Configuration.AllowedUpdateTypes, groupUpdate.Type) == -1)
+#pragma warning disable 612, 618 // Ignore Obsolete attribute
+                if ((Configuration.AllowedUpdateTypes != null
+                    && Array.IndexOf(Configuration.AllowedUpdateTypes, groupUpdate.Type) == -1)
+                    || (Configuration.AllowedTypes != null
+                        && !Configuration.AllowedTypes.Contains(groupUpdate.Instance.GetType())))
                     continue;
+#pragma warning restore 612, 618 // Ignore Obsolete attribute
 
                 yield return groupUpdate;
             }

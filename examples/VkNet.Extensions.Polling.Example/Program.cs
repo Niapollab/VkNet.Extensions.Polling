@@ -90,7 +90,7 @@ namespace VkNet.Extensions.Polling.Example
         private static Task PrintGroupUpdateAsync(GroupUpdate groupUpdate)
         {
             Log.ForContext("Update", groupUpdate)
-                .Information($"Получен групповой апдейт для группы {groupUpdate.GroupId}. Тип: {groupUpdate.Type}.");
+                .Information($"Получен групповой апдейт для группы {groupUpdate.Instance.GetType()}.");
 
             return Task.CompletedTask;
         }
