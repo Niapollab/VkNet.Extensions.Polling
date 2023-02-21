@@ -22,7 +22,7 @@ namespace VkNet.Extensions.Polling.Example
                 .WriteTo.File("Logs/App.log")
                 .WriteTo.Console(LogEventLevel.Debug)
                 .CreateLogger();
-            
+
             IServiceCollection serviceCollection = new ServiceCollection()
                 .AddLogging(loggingBuilder =>
                 {
@@ -30,75 +30,79 @@ namespace VkNet.Extensions.Polling.Example
                     loggingBuilder.SetMinimumLevel(LogLevel.Trace);
                     loggingBuilder.AddSerilog(dispose: true);
                 });
-            
+
             Log.Information("VkNet.Extensions.Polling. Тестовое приложение.");
-            
+
             Console.Write("Введите токен доступа (можно как для группы, так и для пользователя): ");
 
             string accessToken = Console.ReadLine();
 
             VkApi vkApi = new VkApi(serviceCollection);
-            
+
             vkApi.Authorize(new ApiAuthParams()
             {
                 AccessToken = accessToken
             });
 
             CancellationTokenSource cancellationTokenSource = new CancellationTokenSource();
-            
+
             if (vkApi.IsAuthorizedAsUser())
             {
                 UserLongPoll userLongPoll = vkApi.StartUserLongPollAsync(UserLongPollConfiguration.Default, cancellationTokenSource.Token);
 
-                StartReceiving(userLongPoll.AsChannelReader(), PrintUserUpdate);
+                await StartReceiving(userLongPoll.AsChannelReader(), PrintUserUpdateAsync, cancellationTokenSource.Token);
             }
 
-            else if(vkApi.IsAuthorizedAsGroup())
+            else if (vkApi.IsAuthorizedAsGroup())
             {
                 GroupLongPoll groupLongPoll = vkApi.StartGroupLongPollAsync(GroupLongPollConfiguration.Default, cancellationTokenSource.Token);
 
-                StartReceiving(groupLongPoll.AsChannelReader(), PrintGroupUpdate);
+                await StartReceiving(groupLongPoll.AsChannelReader(), PrintGroupUpdateAsync, cancellationTokenSource.Token);
             }
             else
             {
                 Log.Information("Для корректной работы приложения требуется авторизация.");
             }
 
-            while (true)  
+            while (true)
             {
                 Log.Information("Нажмите E чтобы прервать выполнение приложения.");
-                
+
                 if (Console.ReadKey().Key == ConsoleKey.E)
                 {
                     Log.Information("Вы нажали Е. Производится закрытие приложения.");
-                    
+
                     cancellationTokenSource.Cancel();
                     break;
                 }
             }
-            
+
         }
 
-        private static void PrintUserUpdate(UserUpdate userUpdate)
+        private static Task PrintUserUpdateAsync(UserUpdate userUpdate)
         {
             Log.ForContext("Update", userUpdate)
                 .Information($"Получен пользовательский апдейт: {userUpdate.Message.Id}. Текст: {userUpdate.Message.Text}..");
+
+            return Task.CompletedTask;
         }
-        
-        private static void PrintGroupUpdate(GroupUpdate groupUpdate)
+
+        private static Task PrintGroupUpdateAsync(GroupUpdate groupUpdate)
         {
             Log.ForContext("Update", groupUpdate)
                 .Information($"Получен групповой апдейт для группы {groupUpdate.GroupId}. Тип: {groupUpdate.Type}.");
+
+            return Task.CompletedTask;
         }
-        
-        
-        private static async Task StartReceiving<TUpdate>(ChannelReader<TUpdate> channelReader, Action<TUpdate> updateAction)
+
+
+        private static async Task StartReceiving<TUpdate>(ChannelReader<TUpdate> channelReader, Func<TUpdate, Task> updateFunc, CancellationToken cancellationToken = default)
         {
-            IAsyncEnumerable<TUpdate> updateAsyncEnumerable = channelReader.ReadAllAsync();
+            IAsyncEnumerable<TUpdate> updateAsyncEnumerable = channelReader.ReadAllAsync(cancellationToken);
 
             await foreach (TUpdate update in updateAsyncEnumerable)
             {
-                updateAction(update);
+                await updateFunc(update);
             }
         }
     }
