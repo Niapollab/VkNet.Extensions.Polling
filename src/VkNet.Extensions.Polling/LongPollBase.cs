@@ -54,59 +54,7 @@ namespace VkNet.Extensions.Polling
             var linkedTokenSource =
                 CancellationTokenSource.CreateLinkedTokenSource(_longPollStopTokenSource.Token, cancellationToken);
 
-            var longPollServerInformation = await GetServerInformationAsync(_vkApi, longPollConfiguration, linkedTokenSource.Token)
-                .ConfigureAwait(false);
-
-            await Task.Factory.StartNew(async () =>
-            {
-                while (!linkedTokenSource.IsCancellationRequested)
-                {
-                    bool needRepeat;
-
-                    TLongPollResponse longPollResponse = default;
-
-                    do
-                    {
-                        try
-                        {
-                            longPollResponse = await GetUpdatesAsync(_vkApi, longPollConfiguration,
-                                longPollServerInformation,
-                                linkedTokenSource.Token)
-                                .ConfigureAwait(false);
-
-                            needRepeat = false;
-                        }
-                        catch
-                        {
-                            try
-                            {
-                                longPollServerInformation =
-                                    await GetServerInformationAsync(_vkApi, longPollConfiguration,
-                                        linkedTokenSource.Token)
-                                        .ConfigureAwait(false);
-                            }
-                            catch
-                            {
-                            }
-
-                            needRepeat = true;
-                        }
-                    } while (needRepeat);
-
-                    var updates = ConvertLongPollResponse(longPollResponse);
-
-                    foreach (var update in updates)
-                    {
-                        await _updateChannelWriter
-                            .WriteAsync(update, cancellationToken: cancellationToken)
-                            .ConfigureAwait(false);
-                    }
-
-                    await Task
-                        .Delay(Configuration.RequestDelay)
-                        .ConfigureAwait(false);
-                }
-            }, linkedTokenSource.Token).ConfigureAwait(false);
+            _ = ReceiveUpdatesAsync(linkedTokenSource.Token);
         }
 
         protected abstract Task<TLongPollServerState> GetServerInformationAsync(IVkApi vkApi,
@@ -117,7 +65,6 @@ namespace VkNet.Extensions.Polling
             CancellationToken cancellationToken = default);
 
         protected abstract IEnumerable<TLongPollUpdate> ConvertLongPollResponse(TLongPollResponse longPollResponse);
-
 
         public Task Stop()
         {
@@ -148,6 +95,60 @@ namespace VkNet.Extensions.Polling
         {
             Dispose(disposing: true);
             GC.SuppressFinalize(this);
+        }
+
+        private async ValueTask ReceiveUpdatesAsync(CancellationToken cancellationToken = default)
+        {
+            var longPollServerInformation = await GetServerInformationAsync(_vkApi, Configuration, cancellationToken)
+                .ConfigureAwait(false);
+
+            while (!cancellationToken.IsCancellationRequested)
+            {
+                bool needRepeat;
+
+                TLongPollResponse longPollResponse = default;
+
+                do
+                {
+                    try
+                    {
+                        longPollResponse = await GetUpdatesAsync(_vkApi, Configuration,
+                            longPollServerInformation,
+                            cancellationToken)
+                            .ConfigureAwait(false);
+
+                        needRepeat = false;
+                    }
+                    catch
+                    {
+                        try
+                        {
+                            longPollServerInformation =
+                                await GetServerInformationAsync(_vkApi, Configuration,
+                                    cancellationToken)
+                                    .ConfigureAwait(false);
+                        }
+                        catch
+                        {
+                        }
+
+                        needRepeat = true;
+                    }
+                } while (needRepeat);
+
+                var updates = ConvertLongPollResponse(longPollResponse);
+
+                foreach (var update in updates)
+                {
+                    await _updateChannelWriter
+                        .WriteAsync(update, cancellationToken: cancellationToken)
+                        .ConfigureAwait(false);
+                }
+
+                await Task
+                    .Delay(Configuration.RequestDelay)
+                    .ConfigureAwait(false);
+            }
         }
     }
 }
