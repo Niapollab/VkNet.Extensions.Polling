@@ -1,6 +1,5 @@
 ﻿using System;
 using System.Threading;
-using System.Threading.Tasks;
 using VkNet.Extensions.Polling.Models.Configuration;
 
 namespace VkNet.Extensions.Polling
@@ -17,7 +16,7 @@ namespace VkNet.Extensions.Polling
         {
             UserLongPoll userLongPoll = new UserLongPoll(vkApi);
 
-            userLongPoll.Start(userLongPollConfiguration, cancellationToken).ConfigureAwait(false);
+            _ = userLongPoll.Start(userLongPollConfiguration, cancellationToken);
 
             return userLongPoll;
         }
@@ -32,7 +31,7 @@ namespace VkNet.Extensions.Polling
         {
             GroupLongPoll groupLongPoll = new GroupLongPoll(vkApi);
 
-            groupLongPoll.Start(groupLongPollConfiguration, cancellationToken).ConfigureAwait(false);
+            _ = groupLongPoll.Start(groupLongPollConfiguration, cancellationToken);
 
             return groupLongPoll;
         }

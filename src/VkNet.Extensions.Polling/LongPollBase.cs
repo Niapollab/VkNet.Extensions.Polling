@@ -36,26 +36,26 @@ namespace VkNet.Extensions.Polling
 
             _vkApi = vkApi;
             _longPollStopTokenSource = new CancellationTokenSource();
-
-            if (!Validate(vkApi))
-            {
-                throw new NotSupportedException("Выбранный тип лонг пулла недоступен для данного аккаунта.");
-            }
         }
 
-        protected abstract bool Validate(IVkApi vkApi);
+        protected abstract Task<bool> ValidateAsync(IVkApi vkApi);
 
         public TLongPollConfiguration Configuration { get; private set; }
 
         public async Task Start(TLongPollConfiguration longPollConfiguration,
             CancellationToken cancellationToken = default)
         {
+            if (!await ValidateAsync(_vkApi).ConfigureAwait(false))
+            {
+                throw new NotSupportedException("Выбранный тип лонг пулла недоступен для данного аккаунта.");
+            }
+
             Configuration = longPollConfiguration;
             var linkedTokenSource =
                 CancellationTokenSource.CreateLinkedTokenSource(_longPollStopTokenSource.Token, cancellationToken);
 
-            var longPollServerInformation =
-                await GetServerInformationAsync(_vkApi, longPollConfiguration, linkedTokenSource.Token);
+            var longPollServerInformation = await GetServerInformationAsync(_vkApi, longPollConfiguration, linkedTokenSource.Token)
+                .ConfigureAwait(false);
 
             await Task.Factory.StartNew(async () =>
             {
@@ -71,7 +71,8 @@ namespace VkNet.Extensions.Polling
                         {
                             longPollResponse = await GetUpdatesAsync(_vkApi, longPollConfiguration,
                                 longPollServerInformation,
-                                linkedTokenSource.Token);
+                                linkedTokenSource.Token)
+                                .ConfigureAwait(false);
 
                             needRepeat = false;
                         }
@@ -81,7 +82,8 @@ namespace VkNet.Extensions.Polling
                             {
                                 longPollServerInformation =
                                     await GetServerInformationAsync(_vkApi, longPollConfiguration,
-                                        linkedTokenSource.Token);
+                                        linkedTokenSource.Token)
+                                        .ConfigureAwait(false);
                             }
                             catch
                             {
@@ -95,12 +97,16 @@ namespace VkNet.Extensions.Polling
 
                     foreach (var update in updates)
                     {
-                        await _updateChannelWriter.WriteAsync(update, cancellationToken: cancellationToken);
+                        await _updateChannelWriter
+                            .WriteAsync(update, cancellationToken: cancellationToken)
+                            .ConfigureAwait(false);
                     }
 
-                    await Task.Delay(Configuration.RequestDelay);
+                    await Task
+                        .Delay(Configuration.RequestDelay)
+                        .ConfigureAwait(false);
                 }
-            }, linkedTokenSource.Token);
+            }, linkedTokenSource.Token).ConfigureAwait(false);
         }
 
         protected abstract Task<TLongPollServerState> GetServerInformationAsync(IVkApi vkApi,

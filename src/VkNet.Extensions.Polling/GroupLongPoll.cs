@@ -16,21 +16,24 @@ namespace VkNet.Extensions.Polling
         LongPollBase<BotsLongPollHistoryResponse, GroupUpdate, GroupLongPollServerState,
             GroupLongPollConfiguration>
     {
-        private long _groupId;
+        private ulong _groupId;
 
         public GroupLongPoll(IVkApi vkApi) : base(vkApi)
         {
         }
 
-        protected override bool Validate(IVkApi vkApi)
+        protected override async Task<bool> ValidateAsync(IVkApi vkApi)
         {
-            var groups = vkApi.Groups.GetById(null, null, null);
+            var groups = await vkApi
+                .Groups
+                .GetByIdAsync(null, null, null)
+                .ConfigureAwait(false);
 
             var groupOwner = groups.FirstOrDefault();
 
             if (groupOwner != null)
             {
-                _groupId = groupOwner.Id;
+                _groupId = (ulong)groupOwner.Id;
 
                 return true;
             }
@@ -41,33 +44,40 @@ namespace VkNet.Extensions.Polling
         protected override async Task<GroupLongPollServerState> GetServerInformationAsync(IVkApi vkApi,
             GroupLongPollConfiguration longPollConfiguration, CancellationToken cancellationToken = default)
         {
-            return await vkApi.Groups.GetLongPollServerAsync(Convert.ToUInt64(_groupId))
-                .ContinueWith(_ =>
-                {
-                    return new GroupLongPollServerState(
-                        Convert.ToUInt64(_.Result.Ts),
-                        _.Result.Key,
-                        _.Result.Server
-                    );
-                }, cancellationToken);
+            cancellationToken.ThrowIfCancellationRequested();
+
+            var longPollServerResponse = await vkApi
+                .Groups
+                .GetLongPollServerAsync(_groupId)
+                .ConfigureAwait(false);
+
+            return new GroupLongPollServerState(
+                Convert.ToUInt64(longPollServerResponse.Ts),
+                longPollServerResponse.Key,
+                longPollServerResponse.Server
+            );
         }
 
-        protected override Task<BotsLongPollHistoryResponse> GetUpdatesAsync(IVkApi vkApi,
+        protected override async Task<BotsLongPollHistoryResponse> GetUpdatesAsync(IVkApi vkApi,
             GroupLongPollConfiguration longPollConfiguration,
             GroupLongPollServerState longPollServerInformation,
             CancellationToken cancellationToken = default)
         {
-            return vkApi.Groups.GetBotsLongPollHistoryAsync(new BotsLongPollHistoryParams
-            {
-                Key = longPollServerInformation.Key,
-                Server = longPollServerInformation.Server,
-                Ts = longPollServerInformation.Ts.ToString()
-            }).ContinueWith(_ =>
-            {
-                longPollServerInformation.Update(Convert.ToUInt64(_.Result.Ts));
+            cancellationToken.ThrowIfCancellationRequested();
 
-                return _.Result;
-            }, cancellationToken);
+            var longPollHistory = await vkApi
+                .Groups
+                .GetBotsLongPollHistoryAsync(new BotsLongPollHistoryParams
+                {
+                    Key = longPollServerInformation.Key,
+                    Server = longPollServerInformation.Server,
+                    Ts = longPollServerInformation.Ts.ToString()
+                })
+                .ConfigureAwait(false);
+
+            longPollServerInformation.Update(Convert.ToUInt64(longPollHistory.Ts));
+
+            return longPollHistory;
         }
 
         protected override IEnumerable<GroupUpdate> ConvertLongPollResponse(

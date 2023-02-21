@@ -19,35 +19,51 @@ namespace VkNet.Extensions.Polling
         {
         }
 
-        protected override bool Validate(IVkApi vkApi)
+        protected override async Task<bool> ValidateAsync(IVkApi vkApi)
         {
-            return vkApi.Users.Get(new long[] { }).Any();
+            var users = await vkApi
+                .Users
+                .GetAsync(Array.Empty<long>())
+                .ConfigureAwait(false);
+
+            return users.Any();
         }
 
         protected override async Task<UserLongPollServerState> GetServerInformationAsync(IVkApi vkApi,
             UserLongPollConfiguration longPollConfiguration, CancellationToken cancellationToken = default)
         {
-            return await vkApi.Messages.GetLongPollServerAsync(true)
-                .ContinueWith(_ => new UserLongPollServerState(Convert.ToUInt64(_.Result.Ts), _.Result?.Pts ?? throw new InvalidOperationException("Не удалось получить Pts. Проблема при получении информации о сервере.")),
-                    cancellationToken);
+            cancellationToken.ThrowIfCancellationRequested();
+
+            var longPollServer = await vkApi
+                .Messages
+                .GetLongPollServerAsync(true)
+                .ConfigureAwait(false);
+
+            ulong pts = longPollServer.Pts ?? throw new InvalidOperationException("Не удалось получить Pts. Проблема при получении информации о сервере.");
+
+            return new UserLongPollServerState(Convert.ToUInt64(longPollServer.Ts), pts);
         }
 
-        protected override Task<LongPollHistoryResponse> GetUpdatesAsync(IVkApi vkApi,
+        protected override async Task<LongPollHistoryResponse> GetUpdatesAsync(IVkApi vkApi,
             UserLongPollConfiguration userLongPollConfiguration,
             UserLongPollServerState longPollServerInformation,
             CancellationToken cancellationToken = default)
         {
-            return vkApi.Messages.GetLongPollHistoryAsync(new MessagesGetLongPollHistoryParams
-            {
-                Pts = longPollServerInformation.Pts,
-                Ts = longPollServerInformation.Ts,
-                Fields = userLongPollConfiguration.Fields
-            }).ContinueWith(_ =>
-            {
-                longPollServerInformation.Update(_.Result.NewPts);
+            cancellationToken.ThrowIfCancellationRequested();
 
-                return _.Result;
-            }, cancellationToken);
+            var longPollHistory = await vkApi
+                .Messages
+                .GetLongPollHistoryAsync(new MessagesGetLongPollHistoryParams
+                {
+                    Pts = longPollServerInformation.Pts,
+                    Ts = longPollServerInformation.Ts,
+                    Fields = userLongPollConfiguration.Fields
+                })
+                .ConfigureAwait(false);
+
+            longPollServerInformation.Update(longPollHistory.NewPts);
+
+            return longPollHistory;
         }
 
         protected override IEnumerable<UserUpdate> ConvertLongPollResponse(
